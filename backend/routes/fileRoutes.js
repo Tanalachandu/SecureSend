@@ -1,7 +1,4 @@
-// ✅ Updated fileRoutes.js
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
 const multer = require('multer');
 const crypto = require('crypto');
 const bcrypt = require('bcrypt');
@@ -10,17 +7,8 @@ const File = require('../models/File');
 
 const router = express.Router();
 
-const uploadDir = path.join(__dirname, '..', 'uploads');
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
-
-const storage = multer.diskStorage({
-  destination: uploadDir,
-  filename: (req, file, cb) => {
-    const unique = Date.now() + '-' + crypto.randomBytes(4).toString('hex') + path.extname(file.originalname);
-    cb(null, unique);
-  }
-});
-const upload = multer({ storage });
+// ✅ Use memory storage
+const upload = multer({ storage: multer.memoryStorage() });
 
 router.post('/upload', upload.single('file'), async (req, res) => {
   try {
@@ -28,11 +16,10 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
 
     const originalName = req.file.originalname;
-    const storedName = req.file.filename;
+    const storedName = Date.now() + '-' + crypto.randomBytes(4).toString('hex');
     const mimeType = req.file.mimetype;
     const size = req.file.size;
-    const filePath = path.join(uploadDir, storedName);
-    const buffer = fs.readFileSync(filePath);
+    const buffer = req.file.buffer;
 
     const iv = crypto.randomBytes(16);
     let key, passwordHash = null;
@@ -45,7 +32,6 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     const cipher = crypto.createCipheriv('aes-256-cbc', key, iv);
     const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
-    fs.writeFileSync(filePath, encrypted);
 
     let expiresAt = null;
     if (expireHours) {
@@ -68,7 +54,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       passwordHash,
       iv: iv.toString('hex'),
       maxDownloads: maxD,
-      expiresAt
+      expiresAt,
+      encryptedData: encrypted.toString('base64')
     });
     await fileDoc.save();
 
@@ -139,7 +126,6 @@ router.post('/unlock/:id', async (req, res) => {
     const fileDoc = await File.findById(req.params.id);
     if (!fileDoc) return res.status(404).json({ error: 'File not found' });
 
-    let key;
     if (fileDoc.passwordHash) {
       if (!req.body.password) return res.status(400).json({ error: 'Password required' });
       const ok = await bcrypt.compare(req.body.password, fileDoc.passwordHash);
@@ -173,9 +159,8 @@ router.post('/download/:id', async (req, res) => {
       key = Buffer.from(req.body.accessKey, 'hex');
     }
 
-    const filePath = path.join(uploadDir, fileDoc.storedName);
-    const enc = fs.readFileSync(filePath);
     const iv = Buffer.from(fileDoc.iv, 'hex');
+    const enc = Buffer.from(fileDoc.encryptedData, 'base64');
     const decipher = crypto.createDecipheriv('aes-256-cbc', key, iv);
     const decrypted = Buffer.concat([decipher.update(enc), decipher.final()]);
 
@@ -196,9 +181,6 @@ router.delete('/:id', async (req, res) => {
     const fileDoc = await File.findById(req.params.id);
     if (!fileDoc) return res.status(404).json({ error: 'File not found' });
     if (fileDoc.owner.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Not authorized' });
-
-    const filePath = path.join(uploadDir, fileDoc.storedName);
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
 
     await fileDoc.deleteOne();
     res.json({ message: 'File deleted successfully' });

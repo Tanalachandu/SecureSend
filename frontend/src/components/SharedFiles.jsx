@@ -1,4 +1,3 @@
-// ✅ UPDATED: SharedFiles.jsx
 import React, { useEffect, useState } from 'react';
 import API from '../utils/api';
 
@@ -6,6 +5,7 @@ function SharedFiles() {
   const [files, setFiles] = useState([]);
   const [error, setError] = useState('');
   const [selectedFile, setSelectedFile] = useState(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     API.get('/files/list')
@@ -24,84 +24,125 @@ function SharedFiles() {
     const now = new Date();
     const expiry = new Date(expiresAt);
     const diff = Math.max(expiry - now, 0);
+    if (diff === 0) return 'Expired';
+
     const hrs = Math.floor(diff / 3600000);
     const mins = Math.floor((diff % 3600000) / 60000);
-    return `${hrs}h ${mins}m remaining`;
+    
+    let timeString = '';
+    if (hrs > 0) timeString += `${hrs}h `;
+    timeString += `${mins}m remaining`;
+    
+    return timeString.trim();
+  };
+
+  const handleCopyLink = (link) => {
+    navigator.clipboard.writeText(link);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000); 
   };
 
   return (
-    <div className="min-h-screen bg-black text-white p-6">
-      <h2 className="text-2xl font-semibold mb-6">Your Shared Files</h2>
-      {error && <p className="text-red-500 mb-4">{error}</p>}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+    <div className="min-h-screen bg-true-black text-text-white p-6 md:p-10 font-sans">
+      <h2 className="text-3xl md:text-4xl font-bold mb-8 text-text-white">Your Shared Files</h2>
+      
+      {error && (
+        <p className="bg-accent-red/20 text-accent-red border border-accent-red px-4 py-3 rounded-md mb-6 animate-fade-in">
+          {error}
+        </p>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {files.map(f => (
-          <div key={f.id} className="bg-[#111] rounded-lg shadow-md p-4 relative">
+          <div 
+            key={f.id} 
+            className="bg-card-dark-gray rounded-lg shadow-card-elevate p-5 border border-border-subtle 
+                       animate-fade-in hover:shadow-lg transition-shadow duration-200 transform hover:scale-[1.02] cursor-pointer"
+            onClick={() => setSelectedFile(f)} 
+          >
             <div className="flex items-center justify-between mb-3">
-              <div className="bg-gray-800 text-blue-300 text-xs px-2 py-1 rounded-full">
+              <span className="bg-true-black text-text-light-gray text-xs font-semibold px-2.5 py-1 rounded-full border border-border-subtle">
                 {f.downloadCount}/{f.maxDownloads || '∞'}
-              </div>
+              </span>
+              <span className={`font-semibold text-sm ${new Date(f.expiresAt) <= new Date() ? 'text-accent-red' : 'text-accent-yellow'}`}>
+                {timeRemaining(f.expiresAt)}
+              </span>
             </div>
-            <p className="text-sm font-semibold truncate">{f.originalName}</p>
-            <p className="text-xs text-gray-400">Shared: {new Date(f.createdAt).toDateString()}</p>
-            <p className="text-xs text-yellow-400 mt-2">{timeRemaining(f.expiresAt)}</p>
-            <div className="mt-4 flex justify-end">
-              <button
-                onClick={() => setSelectedFile(f)}
-                className="text-sm bg-blue-600 hover:bg-blue-700 px-3 py-1 rounded"
-              >
-                View Details
-              </button>
-            </div>
+            <p className="text-xl font-semibold truncate mb-1">{f.originalName}</p>
+            <p className="text-sm text-text-light-gray">Shared: {new Date(f.createdAt).toDateString()}</p>
+            {/* The "View Details" button was removed as per previous instruction to make whole card clickable */}
           </div>
         ))}
+
+        {files.length === 0 && !error && (
+          <div className="col-span-full text-center text-text-light-gray py-10">
+            <p className="text-xl font-medium">No files shared yet.</p>
+            <p className="text-md mt-2">Upload a document to get started!</p>
+          </div>
+        )}
       </div>
 
       {selectedFile && (
-        <div className="fixed inset-0 bg-black bg-opacity-70 flex items-center justify-center z-50">
-          <div className="bg-[#1f1f1f] p-6 rounded-lg w-full max-w-lg mx-4 text-white">
-            <h3 className="text-xl font-semibold mb-4">Share Details</h3>
-            <div className="bg-[#2a2a2a] p-4 rounded mb-4">
-              <p className="font-medium">{selectedFile.originalName}</p>
-              <p className="text-sm text-gray-400">
+        <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 p-4 animate-fade-in">
+          <div className="bg-card-dark-gray p-8 rounded-lg w-full max-w-xl mx-auto text-text-white shadow-card-elevate border border-border-subtle animate-pop-scale">
+            <h3 className="text-2xl font-bold mb-6">Share Details</h3>
+            
+            <div className="bg-card-inner-dark p-4 rounded-md mb-4 border border-border-subtle">
+              <p className="text-lg font-semibold mb-1">{selectedFile.originalName}</p>
+              <p className="text-sm text-text-light-gray">
                 {(selectedFile.size / 1024).toFixed(2)} KB · Shared on {new Date(selectedFile.createdAt).toDateString()}
               </p>
             </div>
-            <div className="mb-4">
-              <label className="block text-sm font-semibold mb-1">Share Link</label>
-              <div className="flex items-center gap-2 bg-[#2a2a2a] p-2 rounded">
+            
+            <div className="mb-6">
+              <label className="block text-sm font-semibold mb-2 text-text-light-gray">Share Link</label>
+              <div className="flex items-center gap-3 bg-card-inner-dark p-3 rounded-md border border-border-subtle group">
                 <input
                   readOnly
                   value={`${window.location.origin}/download/${selectedFile.id}`}
-                  className="bg-transparent w-full text-white outline-none"
+                  className="bg-transparent w-full text-text-white outline-none text-base truncate"
                 />
                 <button
-                  onClick={() => navigator.clipboard.writeText(`${window.location.origin}/download/${selectedFile.id}`)}
-                  className="text-blue-400 hover:text-blue-500"
-                >📋</button>
+                  onClick={() => handleCopyLink(`${window.location.origin}/download/${selectedFile.id}`)}
+                  className="p-2 rounded-md bg-transparent hover:bg-true-black transition-colors duration-200 text-accent-blue flex-shrink-0"
+                  aria-label="Copy link to clipboard"
+                >
+                  {copied ? (
+                    <span className="text-accent-green text-xl animate-copied-fade">✅</span> 
+                  ) : (
+                    <span className="text-accent-blue text-xl">📋</span> 
+                  )}
+                </button>
               </div>
             </div>
-            <div className="bg-gray-800 p-3 rounded text-sm mb-4">
-              <p>This file has been accessed <strong>{selectedFile.downloadCount}</strong> times out of <strong>{selectedFile.maxDownloads || '∞'}</strong> allowed downloads.</p>
-              <p>It will expire <strong>{timeRemaining(selectedFile.expiresAt)}</strong>.</p>
+            
+            <div className="bg-card-inner-dark p-4 rounded-md text-sm mb-6 border border-border-subtle">
+              <p className="mb-1">This file has been accessed <strong className="text-accent-blue">{selectedFile.downloadCount}</strong> times out of <strong className="text-accent-blue">{selectedFile.maxDownloads || '∞'}</strong> allowed downloads.</p>
+              <p className={`font-semibold ${new Date(selectedFile.expiresAt) <= new Date() ? 'text-accent-red' : 'text-accent-yellow'}`}>
+                It will expire <strong>{timeRemaining(selectedFile.expiresAt)}</strong>.
+              </p>
             </div>
-            <div className="text-right flex justify-end gap-2">
+            
+            <div className="flex justify-end gap-3">
               <button
                 onClick={async () => {
-                  try {
-                    await API.delete(`/files/${selectedFile.id}`);
-                    setFiles(prev => prev.filter(f => f.id !== selectedFile.id));
-                    setSelectedFile(null);
-                  } catch (err) {
-                    alert('Failed to delete file.');
+                  if (window.confirm('Are you sure you want to delete this file?')) {
+                    try {
+                      await API.delete(`/files/${selectedFile.id}`);
+                      setFiles(prev => prev.filter(f => f.id !== selectedFile.id));
+                      setSelectedFile(null);
+                    } catch (err) {
+                      alert('Failed to delete file.');
+                    }
                   }
                 }}
-                className="bg-red-600 hover:bg-red-700 px-4 py-2 rounded"
+                className="bg-accent-red hover:bg-red-600 text-white font-semibold px-5 py-2.5 rounded-md transition-all duration-200 shadow-btn-hover"
               >
                 Delete
               </button>
               <button
                 onClick={() => setSelectedFile(null)}
-                className="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded"
+                className="bg-gray-700 hover:bg-gray-600 text-white font-semibold px-5 py-2.5 rounded-md transition-all duration-200 shadow-btn-hover"
               >
                 Close
               </button>

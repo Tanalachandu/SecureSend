@@ -40,7 +40,7 @@ export default function DownloadPage() {
     setBusy(true);
     try {
       await API.post(`/files/unlock/${id}`, { password });
-      const info = await API.get(`/files/${id}`);
+      const info = await API.get(`/files/${id}`); // Fetch updated info after successful unlock
       setFileMeta(info.data);
       setUnlocked(true);
     } catch (err) {
@@ -60,7 +60,7 @@ export default function DownloadPage() {
         { responseType: 'arraybuffer' }
       );
       downloadBlob(res.data, fileMeta.originalName);
-      const info = await API.get(`/files/${id}`);
+      const info = await API.get(`/files/${id}`); // Fetch updated info after download
       setFileMeta(info.data);
     } catch (err) {
       setErrorMsg(err.response?.data?.error || 'Download failed');
@@ -69,10 +69,10 @@ export default function DownloadPage() {
     }
   };
 
-  const expired = fileMeta?.expired;
+  const expired = fileMeta?.expired || (fileMeta && (new Date(fileMeta.expiresAt) <= new Date() || (fileMeta.maxDownloads !== null && fileMeta.downloadCount >= fileMeta.maxDownloads)));
 
   const fmtSize = b => {
-    if (!b) return 'NaN MB';
+    if (b == null) return 'N/A'; // Handle null or undefined
     const kb = b / 1024;
     return kb < 1024 ? `${kb.toFixed(2)} KB` : `${(kb / 1024).toFixed(2)} MB`;
   };
@@ -82,22 +82,37 @@ export default function DownloadPage() {
     const diff = new Date(fileMeta.expiresAt) - Date.now();
     if (diff <= 0) return 'Expired';
     const hrs = Math.floor(diff / 3600000);
-    return `in about ${hrs} hour${hrs !== 1 ? 's' : ''}`;
+    const mins = Math.floor((diff % 3600000) / 60000);
+    
+    let timeString = '';
+    if (hrs > 0) timeString += `${hrs}h `;
+    timeString += `${mins}m remaining`;
+    
+    return timeString.trim();
   };
 
   if (loadingMeta) {
-    return <div className="p-4 text-gray-400">Loading file info…</div>;
+    return (
+      <div className="min-h-screen bg-true-black text-text-white flex items-center justify-center font-sans">
+        <p className="text-text-light-gray animate-pulse">Loading file info…</p>
+      </div>
+    );
   }
+  
   if (requiresPassword === null && errorMsg) {
-    return <div className="p-4 text-red-500">{errorMsg}</div>;
+    return (
+      <div className="min-h-screen bg-true-black text-text-white flex items-center justify-center font-sans">
+        <p className="text-accent-red">{errorMsg}</p>
+      </div>
+    );
   }
 
   if (requiresPassword && !unlocked) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="bg-[#111] rounded-xl border border-purple-600 max-w-sm w-full p-6 text-center">
-          <h1 className="text-white text-xl font-semibold mb-2">Secure File Access</h1>
-          <p className="text-gray-400 mb-6">Enter the passphrase to access the shared file</p>
+      <div className="min-h-screen bg-true-black flex items-center justify-center p-4 font-sans">
+        <div className="bg-card-dark-gray rounded-lg shadow-card-elevate max-w-sm w-full p-6 text-center border border-border-subtle animate-fade-in">
+          <h1 className="text-text-white text-xl font-semibold mb-2">Secure File Access</h1>
+          <p className="text-text-light-gray mb-6">Enter the passphrase to access the shared file</p>
 
           <div className="relative">
             <input
@@ -105,23 +120,24 @@ export default function DownloadPage() {
               placeholder="••••••••"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="w-full bg-black border border-gray-600 rounded px-4 py-2 pr-10 text-white"
+              className="w-full bg-card-inner-dark border border-border-subtle rounded px-4 py-2 pr-10 text-text-white placeholder-text-light-gray focus:outline-none focus:ring-1 focus:ring-accent-blue transition-all duration-200"
             />
             <button
               type="button"
               onClick={() => setShowPassword(v => !v)}
-              className="absolute top-1/2 right-3 -translate-y-1/2 text-gray-400"
+              className="absolute top-1/2 right-3 -translate-y-1/2 text-text-light-gray hover:text-text-white transition-colors duration-200"
+              aria-label={showPassword ? 'Hide password' : 'Show password'}
             >
               {showPassword ? '🙈' : '👁️'}
             </button>
           </div>
 
-          {errorMsg && <p className="mt-2 text-sm text-red-500">{errorMsg}</p>}
+          {errorMsg && <p className="mt-4 text-sm text-accent-red animate-fade-in">{errorMsg}</p>}
 
           <button
             onClick={handleUnlock}
             disabled={busy}
-            className="mt-6 w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-2 rounded disabled:opacity-50"
+            className="mt-6 w-full bg-accent-blue hover:bg-blue-600 text-text-white font-semibold py-2 rounded disabled:opacity-50 shadow-btn-hover transition-all duration-200"
           >
             {busy ? 'Unlocking…' : 'Unlock File'}
           </button>
@@ -131,54 +147,59 @@ export default function DownloadPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4">
-      <div className={`bg-[#111] rounded-xl border ${expired ? 'border-red-500' : 'border-green-700'} max-w-xl w-full p-6`}>
+    <div className="min-h-screen bg-true-black text-text-white flex items-center justify-center p-4 font-sans">
+      <div className={`bg-card-dark-gray rounded-lg shadow-card-elevate max-w-xl w-full p-6 border ${expired ? 'border-accent-red' : 'border-accent-green'} animate-fade-in`}>
         <div className="flex items-center justify-between mb-4">
-          <span className={`text-sm font-semibold ${expired ? 'text-red-500' : 'text-green-400'}`}>
-            {expired ? 'Download Limit Reached' : 'Access Granted'}
+          <span className={`text-sm font-semibold ${expired ? 'text-accent-red' : 'text-accent-green'}`}>
+            {expired ? 'File Expired or Limit Reached' : 'Access Granted'}
           </span>
-          <span className="bg-gray-700 text-xs px-2 py-1 rounded">
-            {fileMeta.originalName?.split('.').pop().toUpperCase()}
-          </span>
+          {fileMeta.originalName && (
+            <span className="bg-card-inner-dark text-text-light-gray text-xs px-2 py-1 rounded">
+              {fileMeta.originalName.split('.').pop().toUpperCase()}
+            </span>
+          )}
         </div>
 
-        <h2 className="text-lg font-bold text-purple-400 truncate mb-2">
+        <h2 className="text-xl font-bold text-accent-blue truncate mb-2">
           {fileMeta.originalName}
         </h2>
-        <p className="text-xs text-gray-400 mb-1">Shared file details</p>
-        <p className="text-sm mb-1">
-          Size: <span className="text-green-400">{fmtSize(fileMeta.size)}</span>
-        </p>
-        <p className="text-sm mb-1">
-          Downloads Left: <span className="text-green-400">{fileMeta.maxDownloads !== null ? fileMeta.maxDownloads - fileMeta.downloadCount : '∞'}</span>
-        </p>
-        <p className="text-sm mb-1 text-orange-400">Time Remaining: {fmtTime()}</p>
+        <p className="text-sm text-text-light-gray mb-3">Shared file details</p>
+        
+        <div className="space-y-2 mb-4">
+          <p className="text-base text-text-white">
+            Size: <span className="text-accent-green font-medium">{fmtSize(fileMeta.size)}</span>
+          </p>
+          <p className="text-base text-text-white">
+            Downloads Left: <span className="text-accent-green font-medium">{fileMeta.maxDownloads !== null ? fileMeta.maxDownloads - fileMeta.downloadCount : '∞'}</span>
+          </p>
+          <p className="text-base text-accent-yellow">Time Remaining: {fmtTime()}</p>
+        </div>
 
         {fileMeta.maxDownloads !== null && (
-          <div className="w-full bg-gray-700 h-2 rounded mt-2">
+          <div className="w-full bg-card-inner-dark h-2 rounded mt-2">
             <div
-              className="bg-purple-600 h-2 rounded"
+              className="bg-accent-blue h-2 rounded transition-all duration-300"
               style={{ width: `${(fileMeta.downloadCount / fileMeta.maxDownloads) * 100}%` }}
             />
           </div>
         )}
         {fileMeta.expiresAt && (
-          <p className="text-xs text-gray-500 mt-1">
-            Expires {new Date(fileMeta.expiresAt).toDateString()}
+          <p className="text-xs text-text-light-gray mt-2">
+            Expires {new Date(fileMeta.expiresAt).toLocaleString()}
           </p>
         )}
 
         {expired ? (
-          <p className="mt-4 text-red-500 text-center font-semibold">
-            This file has reached its download limit.
+          <p className="mt-6 text-accent-red text-center font-semibold text-lg animate-fade-in">
+            This file has expired or reached its download limit.
           </p>
         ) : (
           <>
-            {errorMsg && <p className="mt-2 text-sm text-red-500">{errorMsg}</p>}
+            {errorMsg && <p className="mt-4 text-sm text-accent-red animate-fade-in">{errorMsg}</p>}
             <button
               onClick={handleDownload}
               disabled={busy}
-              className="mt-4 w-full bg-purple-600 hover:bg-purple-700 text-white py-2 rounded disabled:opacity-50"
+              className="mt-6 w-full bg-accent-blue hover:bg-blue-600 text-text-white font-semibold py-3 rounded disabled:opacity-50 shadow-btn-hover transition-all duration-200"
             >
               {busy ? 'Downloading…' : 'Download File'}
             </button>
