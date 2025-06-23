@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { useLocation, useNavigate, Routes, Route } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import UploadPage from './components/UploadPage';
 import Dashboard from './components/Dashboard';
@@ -9,17 +9,22 @@ import NotFound from './components/NotFound';
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
     const isRoot = location.pathname === '/';
+    const isDownload = location.pathname.startsWith('/download');
 
-    // Redirect ONLY if you're on homepage ("/")
     if (isRoot) {
       if (token) navigate('/upload', { replace: true });
-      else navigate('/', { replace: true });
+      else setInitialized(true); // show landing page
+    } else {
+      setInitialized(true); // all other routes should render normally
     }
   }, [location, navigate]);
+
+  if (!initialized) return null;
 
   return (
     <Routes>
