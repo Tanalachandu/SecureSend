@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate, useLocation, Routes, Route } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useLocation, useNavigate, Routes, Route } from 'react-router-dom';
 import LandingPage from './components/LandingPage';
 import UploadPage from './components/UploadPage';
 import Dashboard from './components/Dashboard';
@@ -9,26 +9,17 @@ import NotFound from './components/NotFound';
 function App() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const isDownloadRoute = location.pathname.startsWith('/download');
+    const isRoot = location.pathname === '/';
 
-    // ✅ If not logged in and not on download page, show landing
-    if (!token && !isDownloadRoute && location.pathname === '/') {
-      navigate('/', { replace: true });
+    // Redirect ONLY if you're on homepage ("/")
+    if (isRoot) {
+      if (token) navigate('/upload', { replace: true });
+      else navigate('/', { replace: true });
     }
-
-    // ✅ If logged in and visiting root, redirect to /upload
-    if (token && location.pathname === '/') {
-      navigate('/upload', { replace: true });
-    }
-
-    setInitialized(true);
-  }, [location.pathname, navigate]);
-
-  if (!initialized) return null;
+  }, [location, navigate]);
 
   return (
     <Routes>
