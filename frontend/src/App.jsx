@@ -1,22 +1,22 @@
-import { useEffect } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import LandingPage from './components/LandingPage';
 
 function App() {
   const navigate = useNavigate();
-  const location = useLocation();
+  const [showLanding, setShowLanding] = useState(false);
 
   useEffect(() => {
     const token = localStorage.getItem('token');
-    const isRoot = location.pathname === '/';
-
-    // Only act when visiting the root URL
-    if (isRoot) {
-      if (token) navigate('/upload', { replace: true });
-      else navigate('/', { replace: true }); // show landing page
+    if (token) {
+      navigate('/upload', { replace: true });
+    } else {
+      setShowLanding(true);
     }
-  }, [location, navigate]);
+  }, [navigate]);
 
-  return null; // Just handles redirection logic
+  if (!showLanding) return null;
+  return <LandingPage />;
 }
 
 export default App;
