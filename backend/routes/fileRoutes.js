@@ -4,13 +4,13 @@ const crypto = require('crypto');
 const bcrypt = require('bcrypt');
 const dayjs = require('dayjs');
 const File = require('../models/File');
+const auth = require('../auth');
 
 const router = express.Router();
-
-// ✅ Use memory storage
 const upload = multer({ storage: multer.memoryStorage() });
 
-router.post('/upload', upload.single('file'), async (req, res) => {
+/** 🔐 UPLOAD (protected) */
+router.post('/upload', auth, upload.single('file'), async (req, res) => {
   try {
     const { password, maxDownloads, expireHours } = req.body;
     if (!req.file) return res.status(400).json({ error: 'No file uploaded' });
@@ -23,6 +23,7 @@ router.post('/upload', upload.single('file'), async (req, res) => {
 
     const iv = crypto.randomBytes(16);
     let key, passwordHash = null;
+
     if (password) {
       passwordHash = await bcrypt.hash(password, 10);
       key = crypto.scryptSync(password, 'salt', 32);
@@ -34,15 +35,13 @@ router.post('/upload', upload.single('file'), async (req, res) => {
     const encrypted = Buffer.concat([cipher.update(buffer), cipher.final()]);
 
     let expiresAt = null;
-    if (expireHours) {
-      const hrs = parseInt(expireHours, 10);
-      if (!isNaN(hrs)) expiresAt = dayjs().add(hrs, 'hour').toDate();
+    if (expireHours && !isNaN(parseInt(expireHours))) {
+      expiresAt = dayjs().add(parseInt(expireHours), 'hour').toDate();
     }
 
     let maxD = null;
-    if (maxDownloads) {
-      const md = parseInt(maxDownloads, 10);
-      if (!isNaN(md)) maxD = md;
+    if (maxDownloads && !isNaN(parseInt(maxDownloads))) {
+      maxD = parseInt(maxDownloads);
     }
 
     const fileDoc = new File({
@@ -57,10 +56,12 @@ router.post('/upload', upload.single('file'), async (req, res) => {
       expiresAt,
       encryptedData: encrypted.toString('base64')
     });
+
     await fileDoc.save();
 
     let accessKey = null;
     if (!password) accessKey = key.toString('hex');
+
     res.json({ id: fileDoc._id, accessKey, originalName });
   } catch (err) {
     console.error(err);
@@ -68,7 +69,8 @@ router.post('/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-router.get('/list', async (req, res) => {
+/** 🔐 USER'S FILE LIST (protected) */
+router.get('/list', auth, async (req, res) => {
   try {
     const now = new Date();
     const files = await File.find({
@@ -97,11 +99,11 @@ router.get('/list', async (req, res) => {
   }
 });
 
+/** 🌍 PUBLIC FILE INFO */
 router.get('/:id', async (req, res) => {
   try {
     const fileDoc = await File.findById(req.params.id);
     if (!fileDoc) return res.status(404).json({ error: 'File not found' });
-    if (fileDoc.owner.toString() !== req.user._id.toString()) return res.status(403).json({ error: 'Not authorized' });
 
     const isExpired = fileDoc.expiresAt && dayjs().isAfter(dayjs(fileDoc.expiresAt));
     const limitReached = fileDoc.maxDownloads !== null && fileDoc.downloadCount >= fileDoc.maxDownloads;
@@ -121,6 +123,7 @@ router.get('/:id', async (req, res) => {
   }
 });
 
+/** 🌍 PUBLIC FILE UNLOCK */
 router.post('/unlock/:id', async (req, res) => {
   try {
     const fileDoc = await File.findById(req.params.id);
@@ -141,6 +144,7 @@ router.post('/unlock/:id', async (req, res) => {
   }
 });
 
+/** 🌍 PUBLIC DOWNLOAD */
 router.post('/download/:id', async (req, res) => {
   try {
     const fileDoc = await File.findById(req.params.id);
@@ -176,7 +180,8 @@ router.post('/download/:id', async (req, res) => {
   }
 });
 
-router.delete('/:id', async (req, res) => {
+/** 🔐 DELETE FILE (protected) */
+router.delete('/:id', auth, async (req, res) => {
   try {
     const fileDoc = await File.findById(req.params.id);
     if (!fileDoc) return res.status(404).json({ error: 'File not found' });
